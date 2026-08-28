@@ -15,9 +15,9 @@
         <div>
           <p class="eyebrow">ShipFlow</p>
           <h1>Contador por PDF</h1>
-          <p class="subtitle">Escolha a pasta onde estão os PDFs. O app lê somente o bloco entre DESCRICAO e TOTAL de cada declaração e soma a quantidade por produto.</p>
+          <p class="subtitle">Escolha a pasta onde estão os PDFs. O app lê o bloco DESCRICAO até TOTAL e calcula a quantidade gasta por produto real.</p>
         </div>
-        <div class="badge">📁 Pasta + bloco DESCRICAO</div>
+        <div class="badge">📦 Produtos reais</div>
       </header>
 
       <section class="grid">
@@ -48,7 +48,7 @@
             <strong>Páginas lidas:</strong>
             <span id="pageCount">-</span>
             <strong>Regra:</strong>
-            <span id="mode">Somente linhas entre DESCRICAO e TOTAL</span>
+            <span id="mode">Quantidade interna × multiplicador antes do R$</span>
           </div>
 
           <details class="raw">
@@ -60,7 +60,7 @@
         <div class="card results-card">
           <div class="results-head">
             <div>
-              <h2>Quantidade por descrição</h2>
+              <h2>Quantidade gasta por produto</h2>
               <p id="totalCount">0 unidades encontradas</p>
             </div>
             <div class="actions small">
@@ -75,6 +75,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="/src/app.js?v=descricao-total-1"></script>
+    <script src="/src/app.js?v=produto-real-1"></script>
   </body>
 </html>
