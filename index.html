@@ -15,31 +15,31 @@
         <div>
           <p class="eyebrow">ShipFlow</p>
           <h1>Contador por PDF</h1>
-          <p class="subtitle">Envie um ou vários PDFs das etiquetas com declaração de conteúdo. O app lê tudo em lote e entrega a quantidade por descrição do produto.</p>
+          <p class="subtitle">Adicione um ou vários PDFs das etiquetas com declaração de conteúdo. O app soma tudo em uma única contagem por descrição.</p>
         </div>
-        <div class="badge">📄 Vários PDFs</div>
+        <div class="badge">📄 PDFs em fila</div>
       </header>
 
       <section class="grid">
         <div class="card upload-card">
           <label class="drop" for="pdfInput">
-            <strong>📄 Selecionar PDFs das etiquetas</strong>
-            <span>Pode selecionar vários PDFs de uma vez. O resultado será somado em uma contagem única.</span>
+            <strong>➕ Adicionar PDF à fila</strong>
+            <span>Clique várias vezes para adicionar mais PDFs. Também aceita seleção múltipla quando o navegador permitir.</span>
           </label>
           <input id="pdfInput" type="file" accept="application/pdf,.pdf" multiple hidden />
 
           <div class="actions">
-            <button id="processBtn" class="primary" disabled>⚡ Processar PDFs</button>
-            <button id="clearBtn" disabled>🗑 Limpar</button>
+            <button id="processBtn" class="primary" disabled>⚡ Processar fila de PDFs</button>
+            <button id="clearBtn" disabled>🗑 Limpar fila</button>
           </div>
 
           <div id="status" class="status">Aguardando PDFs.</div>
           <div id="progress" class="progress"><div id="bar"></div></div>
 
           <div class="detected">
-            <strong>Arquivos:</strong>
+            <strong>Arquivos na fila:</strong>
             <span id="fileName">Nenhum selecionado</span>
-            <strong>Páginas:</strong>
+            <strong>Páginas lidas:</strong>
             <span id="pageCount">-</span>
             <strong>Modo:</strong>
             <span id="mode">Texto do PDF + OCR se precisar</span>
@@ -62,13 +62,13 @@
             </div>
           </div>
 
-          <div id="table" class="table"><div class="empty">Envie um ou vários PDFs para gerar a contagem.</div></div>
+          <div id="table" class="table"><div class="empty">Adicione PDFs para gerar a contagem.</div></div>
         </div>
       </section>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="/src/app.js"></script>
+    <script src="/src/app.js?v=fila-pdfs-2"></script>
   </body>
 </html>
