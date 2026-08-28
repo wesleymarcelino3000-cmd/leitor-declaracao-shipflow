@@ -15,9 +15,9 @@
         <div>
           <p class="eyebrow">ShipFlow</p>
           <h1>Contador por PDF</h1>
-          <p class="subtitle">Escolha a pasta onde estão os PDFs ou adicione PDFs um por um. O app soma tudo em uma única contagem por descrição.</p>
+          <p class="subtitle">Escolha a pasta onde estão os PDFs. O app lê somente o bloco entre DESCRICAO e TOTAL de cada declaração e soma a quantidade por produto.</p>
         </div>
-        <div class="badge">📁 Pasta de PDFs</div>
+        <div class="badge">📁 Pasta + bloco DESCRICAO</div>
       </header>
 
       <section class="grid">
@@ -47,8 +47,8 @@
             <span id="fileName">Nenhum selecionado</span>
             <strong>Páginas lidas:</strong>
             <span id="pageCount">-</span>
-            <strong>Modo:</strong>
-            <span id="mode">Texto do PDF + OCR se precisar</span>
+            <strong>Regra:</strong>
+            <span id="mode">Somente linhas entre DESCRICAO e TOTAL</span>
           </div>
 
           <details class="raw">
@@ -61,7 +61,7 @@
           <div class="results-head">
             <div>
               <h2>Quantidade por descrição</h2>
-              <p id="totalCount">0 etiquetas encontradas</p>
+              <p id="totalCount">0 unidades encontradas</p>
             </div>
             <div class="actions small">
               <button id="exportBtn" disabled>⬇ Exportar CSV</button>
@@ -75,6 +75,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="/src/app.js?v=pasta-pdfs-1"></script>
+    <script src="/src/app.js?v=descricao-total-1"></script>
   </body>
 </html>
