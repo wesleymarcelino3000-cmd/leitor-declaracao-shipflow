@@ -6,10 +6,72 @@
     <meta name="theme-color" content="#0f172a" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/favicon.svg" />
+    <link rel="stylesheet" href="/src/style.css" />
     <title>Leitor Declaração ShipFlow</title>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/App.jsx"></script>
+    <main class="app">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">ShipFlow</p>
+          <h1>Leitor de Declaração</h1>
+          <p class="subtitle">Passe a declaração na frente da câmera. O app lê a descrição e soma as etiquetas por produto.</p>
+        </div>
+        <div class="badge">📷 Ao vivo</div>
+      </header>
+
+      <section class="grid">
+        <div class="card camera-card">
+          <div class="video-wrap">
+            <video id="video" playsinline muted></video>
+            <div id="placeholder" class="placeholder">Câmera desligada</div>
+            <div class="scan-box"></div>
+          </div>
+          <canvas id="canvas" hidden></canvas>
+
+          <div class="actions">
+            <button id="cameraBtn" class="primary">📷 Abrir câmera</button>
+            <button id="scanBtn" class="primary">▶ Ler automático</button>
+          </div>
+
+          <div id="status" class="status">Pronto para iniciar</div>
+
+          <div class="detected">
+            <strong>Última descrição:</strong>
+            <span id="lastDescription">Nenhuma ainda</span>
+            <strong>Rastreio:</strong>
+            <span id="lastTracking">Não encontrado</span>
+          </div>
+
+          <div class="actions">
+            <button id="manualBtn" class="primary" disabled>➕ Somar manual</button>
+            <button id="undoBtn" disabled>↩ Desfazer último</button>
+          </div>
+        </div>
+
+        <div class="card results-card">
+          <div class="results-head">
+            <div>
+              <h2>Contagem do lote</h2>
+              <p id="totalCount">0 etiquetas contadas</p>
+            </div>
+            <div class="actions small">
+              <button id="exportBtn" disabled>⬇ Exportar</button>
+              <button id="clearBtn" disabled>🗑 Limpar</button>
+            </div>
+          </div>
+
+          <div id="table" class="table">
+            <div class="empty">Nenhum produto contado ainda.</div>
+          </div>
+
+          <details class="raw">
+            <summary>Ver texto OCR bruto</summary>
+            <pre id="rawText">Nenhuma leitura ainda.</pre>
+          </details>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/app.js"></script>
   </body>
 </html>
