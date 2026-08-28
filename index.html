@@ -15,7 +15,9 @@
         <div>
           <p class="eyebrow">ShipFlow</p>
           <h1>Leitor de Declaração</h1>
-          <p class="subtitle">Passe a declaração na frente da câmera. O app lê a descrição e soma as etiquetas por produto.</p>
+          <p class="subtitle">
+            Passe a declaração na frente da câmera. O app lê a descrição e soma as etiquetas por produto.
+          </p>
         </div>
         <div class="badge">📷 Ao vivo</div>
       </header>
@@ -31,8 +33,10 @@
 
           <div class="actions">
             <button id="cameraBtn" class="primary">📷 Abrir câmera</button>
+            <button id="fallbackBtn" type="button">📸 Usar câmera do celular</button>
             <button id="scanBtn" class="primary">▶ Ler automático</button>
           </div>
+          <input id="fallbackInput" type="file" accept="image/*" capture="environment" hidden />
 
           <div id="status" class="status">Pronto para iniciar</div>
 
