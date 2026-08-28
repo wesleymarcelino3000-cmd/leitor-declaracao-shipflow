@@ -41,13 +41,17 @@ function normalizeText(text) {
     .toUpperCase();
 }
 
-function normalizeLine(line) {
-  return String(line || '')
+function fixOcr(text) {
+  return String(text || '')
     .replace(/DESCR[1IÍ]C[AÃ]O/gi, 'DESCRICAO')
-    .replace(/QTD\s*[xX]\s*TOTAL/gi, 'QTD x TOTAL')
-    .replace(/R\$\s*/gi, 'R$')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/DECLARA[ÇC][AÃ]O/gi, 'DECLARACAO')
+    .replace(/CONTE[ÚU]DO/gi, 'CONTEUDO')
+    .replace(/MELAS[O0]NINA/gi, 'MELASONINA')
+    .replace(/M[ÁA]SCARA/gi, 'MÁSCARA')
+    .replace(/MARACUJ[ÁA]/gi, 'MARACUJÁ')
+    .replace(/LIM[AÃ]O/gi, 'LIMÃO')
+    .replace(/M[O0]RANGO/gi, 'MORANGO')
+    .replace(/D[O0]RMIR/gi, 'DORMIR');
 }
 
 function cleanDescription(text) {
@@ -59,81 +63,160 @@ function cleanDescription(text) {
 }
 
 function canonicalDescription(description) {
-  return cleanDescription(description)
-    .replace(/\s+/g, ' ')
-    .trim();
+  return cleanDescription(description).toUpperCase();
 }
 
-function parseQtyAndDescription(line) {
-  const cleaned = normalizeLine(line);
-  const match = cleaned.match(/^(.*?)\s+(\d+)\s*[xX]\s*R?\$?\s*[\d.,]+\s*$/i);
-  if (!match) return null;
-  const description = cleanDescription(match[1]);
-  const quantity = Number.parseInt(match[2], 10);
-  if (!description || !Number.isFinite(quantity) || quantity <= 0) return null;
-  return { description, quantity };
+function extractTracking(text) {
+  const joined = normalizeText(text);
+  const patterns = [
+    /(?:RASTREIO|OBJETO|CODIGO|TRACKING)[:\s-]*([A-Z0-9]{8,25})/,
+    /\b([A-Z]{2}\d{9}[A-Z]{2})\b/,
+    /\b([A-Z0-9]{8,18})\b/,
+  ];
+  for (const pattern of patterns) {
+    const match = joined.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return '';
 }
 
-function extractProductsFromBlockText(text) {
-  const lines = String(text || '')
+function lineHasDescriptionHeader(line) {
+  return normalizeText(line).includes('DESCRICAO');
+}
+
+function lineHasTotal(line) {
+  return /^\s*TOTAL\s*:?/i.test(normalizeText(line)) || normalizeText(line).startsWith('TOTAL R$');
+}
+
+function findLastQtyPrice(line) {
+  const regex = /(\d+)\s*[xX]\s*R\$\s*[\d.,]+/g;
+  let match;
+  let last = null;
+  while ((match = regex.exec(line)) !== null) {
+    last = {
+      qty: Number(match[1]),
+      index: match.index,
+      text: match[0],
+    };
+  }
+  return last;
+}
+
+function extractDescriptionBlock(text) {
+  const lines = fixOcr(text)
     .split(/\n+/)
-    .map(normalizeLine)
+    .map((line) => line.trim())
     .filter(Boolean);
 
-  const products = [];
-  let inside = false;
-  let pendingDescription = '';
+  const blocks = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!lineHasDescriptionHeader(lines[i])) continue;
 
-  for (const line of lines) {
-    const normalized = normalizeText(line);
+    const block = [];
+    const headerTail = lines[i]
+      .replace(/DESCRICAO/gi, '')
+      .replace(/QTD\s*x\s*TOTAL/gi, '')
+      .trim();
+    if (headerTail && !/^QTD/i.test(headerTail)) block.push(headerTail);
 
-    if (normalized.includes('DESCRICAO') && normalized.includes('QTD')) {
-      inside = true;
-      pendingDescription = '';
+    for (let j = i + 1; j < lines.length; j += 1) {
+      if (lineHasTotal(lines[j])) break;
+      const n = normalizeText(lines[j]);
+      if (!n || n.includes('DECLARO QUE') || n.includes('ASSINATURA')) break;
+      block.push(lines[j]);
+    }
+    if (block.length) blocks.push(block);
+  }
+  return blocks;
+}
+
+function parseProductRowsFromBlock(blockLines) {
+  const rows = [];
+  let current = null;
+
+  for (const rawLine of blockLines) {
+    const line = cleanDescription(rawLine);
+    if (!line) continue;
+
+    const qtyPrice = findLastQtyPrice(line);
+    if (qtyPrice) {
+      if (current?.description) rows.push(current);
+      const desc = cleanDescription(line.slice(0, qtyPrice.index));
+      current = {
+        description: desc,
+        quantity: qtyPrice.qty || 1,
+        rawLines: [line],
+      };
       continue;
     }
 
-    if (!inside && normalized === 'DESCRICAO') {
-      inside = true;
-      pendingDescription = '';
-      continue;
-    }
-
-    if (!inside) continue;
-
-    if (normalized.startsWith('TOTAL') || normalized.includes('TOTAL:')) {
-      if (pendingDescription) pendingDescription = '';
-      inside = false;
-      continue;
-    }
-
-    if (normalized === 'QTD X TOTAL' || normalized === 'QTD TOTAL') continue;
-    if (!line || /^[-_—=]+$/.test(line)) continue;
-
-    const parsed = parseQtyAndDescription(line);
-    if (parsed) {
-      const fullDescription = cleanDescription([pendingDescription, parsed.description].filter(Boolean).join(' '));
-      products.push({ description: canonicalDescription(fullDescription), quantity: parsed.quantity, line });
-      pendingDescription = '';
-      continue;
-    }
-
-    if (/\d+\s*[xX]\s*R?\$?\s*[\d.,]+/.test(line) && pendingDescription) {
-      const qtyMatch = line.match(/(\d+)\s*[xX]\s*R?\$?\s*[\d.,]+/);
-      const qty = qtyMatch ? Number.parseInt(qtyMatch[1], 10) : 0;
-      if (qty > 0) {
-        products.push({ description: canonicalDescription(pendingDescription), quantity: qty, line });
-        pendingDescription = '';
-      }
-      continue;
-    }
-
-    if (!/^(REMETENTE|DESTINATARIO|DECLARACAO|ASSINATURA|DOCUMENTO|OBSERVACAO|CPF|CNPJ|CEP|RUA|AVENIDA|BAIRRO|CIDADE)/i.test(normalized)) {
-      pendingDescription = cleanDescription([pendingDescription, line].filter(Boolean).join(' '));
+    if (current) {
+      current.description = cleanDescription(`${current.description} ${line}`);
+      current.rawLines.push(line);
     }
   }
 
+  if (current?.description) rows.push(current);
+  return rows.filter((row) => row.description && row.quantity > 0);
+}
+
+function parseProductsFromText(text) {
+  const blocks = extractDescriptionBlock(text);
+  const products = [];
+  for (const block of blocks) products.push(...parseProductRowsFromBlock(block));
   return products;
+}
+
+function addPageResults(fileName, page, raw, source) {
+  const text = fixOcr(raw);
+  const tracking = extractTracking(text);
+  const products = parseProductsFromText(text);
+
+  pageReads.push({
+    fileName,
+    page,
+    source,
+    tracking,
+    counted: products.length,
+    raw: text,
+    products,
+  });
+
+  for (const product of products) {
+    const canonical = canonicalDescription(product.description);
+    results.push({
+      fileName,
+      page,
+      source,
+      tracking,
+      description: product.description,
+      canonical,
+      quantity: product.quantity,
+      rawLines: product.rawLines,
+    });
+    counts[canonical] = (counts[canonical] || 0) + product.quantity;
+  }
+}
+
+function itemsToLines(items) {
+  const rows = [];
+  for (const item of items) {
+    const text = String(item.str || '').trim();
+    if (!text) continue;
+    const x = item.transform?.[4] || 0;
+    const y = item.transform?.[5] || 0;
+    let row = rows.find((r) => Math.abs(r.y - y) <= 3);
+    if (!row) {
+      row = { y, items: [] };
+      rows.push(row);
+    }
+    row.items.push({ x, text });
+  }
+
+  return rows
+    .sort((a, b) => b.y - a.y)
+    .map((row) => row.items.sort((a, b) => a.x - b.x).map((item) => item.text).join(' '))
+    .join('\n');
 }
 
 async function getOcrWorker() {
@@ -149,7 +232,7 @@ function enhanceCanvas(ctx, width, height) {
   const data = image.data;
   for (let i = 0; i < data.length; i += 4) {
     const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-    const contrast = gray < 180 ? 0 : 255;
+    const contrast = gray < 170 ? 0 : 255;
     data[i] = contrast;
     data[i + 1] = contrast;
     data[i + 2] = contrast;
@@ -158,7 +241,7 @@ function enhanceCanvas(ctx, width, height) {
 }
 
 async function ocrPage(page) {
-  const viewport = page.getViewport({ scale: 2.8 });
+  const viewport = page.getViewport({ scale: 2.5 });
   const pageCanvas = document.createElement('canvas');
   const ctx = pageCanvas.getContext('2d', { willReadFrequently: true });
   pageCanvas.width = Math.floor(viewport.width);
@@ -172,23 +255,10 @@ async function ocrPage(page) {
 
 async function readTextFromPage(page) {
   const content = await page.getTextContent();
-  const text = content.items.map((item) => item.str || '').join('\n');
-  if (normalizeText(text).includes('DESCRICAO') && normalizeText(text).includes('TOTAL')) {
-    return { text, source: 'texto do PDF' };
-  }
+  const text = itemsToLines(content.items || []);
+  if (parseProductsFromText(text).length > 0) return { text, source: 'texto do PDF' };
   const ocrText = await ocrPage(page);
   return { text: ocrText || text, source: ocrText ? 'OCR da página' : 'texto parcial' };
-}
-
-function addProducts(fileName, page, raw, source) {
-  const products = extractProductsFromBlockText(raw);
-  pageReads.push({ fileName, page, source, products, raw });
-
-  for (const product of products) {
-    const key = canonicalDescription(product.description);
-    counts[key] = (counts[key] || 0) + product.quantity;
-    results.push({ fileName, page, source, description: key, quantity: product.quantity, rawLine: product.line });
-  }
 }
 
 async function processPdfs() {
@@ -203,6 +273,7 @@ async function processPdfs() {
   pageReads = [];
   render();
   rawTextEl.textContent = '';
+  setProgress(0, 1);
   processBtn.disabled = true;
   clearBtn.disabled = true;
   exportBtn.disabled = true;
@@ -227,7 +298,7 @@ async function processPdfs() {
         setStatus(`Lendo ${item.file.name} — página ${pageNumber} de ${item.pdf.numPages}...`);
         const page = await item.pdf.getPage(pageNumber);
         const { text, source } = await readTextFromPage(page);
-        addProducts(item.file.name, pageNumber, text, source);
+        addPageResults(item.file.name, pageNumber, text, source);
         readPages += 1;
         pageCountEl.textContent = `${readPages}/${totalPages}`;
         setProgress(readPages, totalPages);
@@ -236,8 +307,9 @@ async function processPdfs() {
       }
     }
 
-    const found = Object.values(counts).reduce((sum, qty) => sum + qty, 0);
-    setStatus(found ? `Pronto. ${found} unidades encontradas em ${selectedFiles.length} PDF(s).` : 'Não encontrei produtos no bloco entre DESCRICAO e TOTAL.');
+    const totalUnits = Object.values(counts).reduce((sum, qty) => sum + qty, 0);
+    const countedPages = pageReads.filter((p) => p.counted > 0).length;
+    setStatus(totalUnits ? `Pronto. ${totalUnits} unidades em ${countedPages}/${totalPages} páginas com declaração.` : 'Não encontrei produtos no bloco DESCRICAO → TOTAL.');
   } catch (error) {
     console.error(error);
     setStatus(`Erro ao processar PDFs: ${error.message || error}`);
@@ -255,10 +327,11 @@ function renderRaw() {
   }
 
   rawTextEl.textContent = pageReads.map((item) => {
-    const found = item.products.length
+    const header = `${item.fileName} | PÁGINA ${item.page} | ${item.source} | ${item.counted ? `${item.counted} produto(s)` : 'NÃO CONTADA'}`;
+    const fields = item.products.length
       ? item.products.map((p) => `- ${p.description} = ${p.quantity}`).join('\n')
-      : '- nenhum produto encontrado no bloco DESCRICAO até TOTAL';
-    return `${item.fileName} | PÁGINA ${item.page} | ${item.source}\nProdutos encontrados:\n${found}\n\nTEXTO LIDO:\n${item.raw}`;
+      : 'Nenhum produto encontrado entre DESCRICAO e TOTAL.';
+    return `${header}\nRastreio: ${item.tracking || '-'}\n${fields}\n\n${item.raw}`;
   }).join('\n\n------------------------------\n\n');
 }
 
@@ -266,8 +339,10 @@ function render() {
   const rows = Object.entries(counts)
     .map(([description, count]) => ({ description, count }))
     .sort((a, b) => b.count - a.count || a.description.localeCompare(b.description));
+
   const total = rows.reduce((sum, row) => sum + row.count, 0);
-  totalCountEl.textContent = `${total} unidades encontradas`;
+  const countedPages = pageReads.filter((p) => p.counted > 0).length;
+  totalCountEl.textContent = `${total} unidades encontradas | ${rows.length} produtos | ${countedPages} páginas com declaração`;
   exportBtn.disabled = rows.length === 0;
 
   if (!rows.length) {
@@ -328,13 +403,18 @@ function exportCsv() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `contagem-produtos-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = `contagem-pdf-etiquetas-${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
 
 function escapeHtml(text) {
-  return String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+  return String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 function clearAll() {
@@ -360,5 +440,4 @@ if (folderInput) folderInput.addEventListener('change', (event) => addFiles(even
 processBtn.addEventListener('click', processPdfs);
 clearBtn.addEventListener('click', clearAll);
 exportBtn.addEventListener('click', exportCsv);
-
 render();
