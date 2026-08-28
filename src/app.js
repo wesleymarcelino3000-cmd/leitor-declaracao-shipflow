@@ -12,7 +12,7 @@ const tableEl = $('table');
 const totalCountEl = $('totalCount');
 const barEl = $('bar');
 
-let selectedFile = null;
+let selectedFiles = [];
 let results = [];
 let counts = {};
 let ocrWorker = null;
@@ -97,6 +97,16 @@ function isProductLine(line) {
   return /[A-ZÀ-Ú]{3,}/i.test(line) && !/R\$|CPF|CNPJ|CEP|RUA|AVENIDA|BAIRRO|CIDADE/i.test(line);
 }
 
+function scoreProductLine(line) {
+  const t = normalizeText(line);
+  let score = Math.min(t.length, 80) / 10;
+  ['KIT', 'COMPRE', 'LEVE', 'SABORES', 'RASPADOR', 'FIO', 'HALITO'].forEach((word) => {
+    if (t.includes(word)) score += 8;
+  });
+  if (/CPF|CNPJ|CEP|RUA|AVENIDA|BAIRRO|DESTINATARIO|REMETENTE/.test(t)) score -= 20;
+  return score;
+}
+
 function extractDescription(text) {
   const fixed = fixOcr(text);
   const lines = fixed.split(/\n+/).map((line) => line.trim()).filter(Boolean);
@@ -123,16 +133,6 @@ function extractDescription(text) {
   return '';
 }
 
-function scoreProductLine(line) {
-  const t = normalizeText(line);
-  let score = Math.min(t.length, 80) / 10;
-  ['KIT', 'COMPRE', 'LEVE', 'SABORES', 'RASPADOR', 'FIO', 'HALITO'].forEach((word) => {
-    if (t.includes(word)) score += 8;
-  });
-  if (/CPF|CNPJ|CEP|RUA|AVENIDA|BAIRRO|DESTINATARIO|REMETENTE/.test(t)) score -= 20;
-  return score;
-}
-
 function canonicalDescription(description) {
   const t = normalizeText(description)
     .replace(/[^A-Z0-9]+/g, ' ')
@@ -153,14 +153,14 @@ function canonicalDescription(description) {
   return cleanDescription(description).toUpperCase();
 }
 
-function addResult(page, raw, source) {
+function addResult(fileName, page, raw, source) {
   const text = fixOcr(raw);
   const description = extractDescription(text);
   const tracking = extractTracking(text);
   const valid = looksLikeDeclaration(text) && Boolean(description);
   const canonical = valid ? canonicalDescription(description) : '';
 
-  results.push({ page, source, valid, description, canonical, tracking, raw: text });
+  results.push({ fileName, page, source, valid, description, canonical, tracking, raw: text });
   if (valid) counts[canonical] = (counts[canonical] || 0) + 1;
 }
 
@@ -174,14 +174,14 @@ async function getOcrWorker() {
 
 async function ocrPage(page) {
   const viewport = page.getViewport({ scale: 2.4 });
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  canvas.width = Math.floor(viewport.width);
-  canvas.height = Math.floor(viewport.height);
+  const ocrCanvas = document.createElement('canvas');
+  const ctx = ocrCanvas.getContext('2d', { willReadFrequently: true });
+  ocrCanvas.width = Math.floor(viewport.width);
+  ocrCanvas.height = Math.floor(viewport.height);
   await page.render({ canvasContext: ctx, viewport }).promise;
-  enhanceCanvas(ctx, canvas.width, canvas.height);
+  enhanceCanvas(ctx, ocrCanvas.width, ocrCanvas.height);
   const worker = await getOcrWorker();
-  const result = await worker.recognize(canvas);
+  const result = await worker.recognize(ocrCanvas);
   return result?.data?.text || '';
 }
 
@@ -206,8 +206,18 @@ async function readTextFromPage(page) {
   return { text: ocrText || text, source: ocrText ? 'OCR da página' : 'texto parcial' };
 }
 
-async function processPdf() {
-  if (!selectedFile) return;
+async function countPages(files) {
+  let total = 0;
+  for (const file of files) {
+    const buffer = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+    total += pdf.numPages;
+  }
+  return total;
+}
+
+async function processPdfs() {
+  if (!selectedFiles.length) return;
   if (!window.pdfjsLib) {
     setStatus('Leitor de PDF não carregou. Atualize a página.');
     return;
@@ -223,29 +233,37 @@ async function processPdf() {
   exportBtn.disabled = true;
 
   try {
-    setStatus('Abrindo PDF...');
-    const buffer = await selectedFile.arrayBuffer();
-    const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
-    pageCountEl.textContent = String(pdf.numPages);
+    setStatus('Calculando páginas dos PDFs...');
+    const totalPages = await countPages(selectedFiles);
+    pageCountEl.textContent = String(totalPages);
 
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      setStatus(`Lendo página ${pageNumber} de ${pdf.numPages}...`);
-      const page = await pdf.getPage(pageNumber);
-      const { text, source } = await readTextFromPage(page);
-      addResult(pageNumber, text, source);
-      setProgress(pageNumber, pdf.numPages);
-      renderRaw();
-      render();
+    let donePages = 0;
+    for (let fileIndex = 0; fileIndex < selectedFiles.length; fileIndex += 1) {
+      const file = selectedFiles[fileIndex];
+      setStatus(`Abrindo PDF ${fileIndex + 1} de ${selectedFiles.length}: ${file.name}`);
+      const buffer = await file.arrayBuffer();
+      const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        setStatus(`Lendo ${file.name} | página ${pageNumber} de ${pdf.numPages}...`);
+        const page = await pdf.getPage(pageNumber);
+        const { text, source } = await readTextFromPage(page);
+        addResult(file.name, pageNumber, text, source);
+        donePages += 1;
+        setProgress(donePages, totalPages);
+        renderRaw();
+        render();
+      }
     }
 
     const found = Object.values(counts).reduce((sum, qty) => sum + qty, 0);
-    setStatus(found ? `Pronto. ${found} etiquetas encontradas.` : 'Não encontrei descrições. O PDF pode estar sem declaração legível.');
+    setStatus(found ? `Pronto. ${found} etiquetas encontradas em ${selectedFiles.length} PDF(s).` : 'Não encontrei descrições. Os PDFs podem estar sem declaração legível.');
   } catch (error) {
     console.error(error);
-    setStatus(`Erro ao processar PDF: ${error.message || error}`);
+    setStatus(`Erro ao processar PDFs: ${error.message || error}`);
   } finally {
-    processBtn.disabled = !selectedFile;
-    clearBtn.disabled = !selectedFile;
+    processBtn.disabled = selectedFiles.length === 0;
+    clearBtn.disabled = selectedFiles.length === 0;
     exportBtn.disabled = Object.keys(counts).length === 0;
   }
 }
@@ -256,7 +274,7 @@ function renderRaw() {
     return;
   }
   rawTextEl.textContent = results.map((item) => {
-    const header = `PÁGINA ${item.page} | ${item.source} | ${item.valid ? 'OK' : 'NÃO CONTADA'}`;
+    const header = `ARQUIVO ${item.fileName} | PÁGINA ${item.page} | ${item.source} | ${item.valid ? 'OK' : 'NÃO CONTADA'}`;
     const fields = `Descrição: ${item.description || '-'}\nAgrupado como: ${item.canonical || '-'}\nRastreio: ${item.tracking || '-'}`;
     return `${header}\n${fields}\n\n${item.raw}`;
   }).join('\n\n------------------------------\n\n');
@@ -269,7 +287,7 @@ function render() {
   exportBtn.disabled = rows.length === 0;
 
   if (!rows.length) {
-    tableEl.innerHTML = '<div class="empty">Envie um PDF para gerar a contagem.</div>';
+    tableEl.innerHTML = '<div class="empty">Envie um ou vários PDFs para gerar a contagem.</div>';
     return;
   }
 
@@ -292,7 +310,7 @@ function exportCsv() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `contagem-pdf-etiquetas-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = `contagem-pdfs-etiquetas-${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -302,14 +320,14 @@ function escapeHtml(text) {
 }
 
 function clearAll() {
-  selectedFile = null;
+  selectedFiles = [];
   results = [];
   counts = {};
   pdfInput.value = '';
   fileNameEl.textContent = 'Nenhum selecionado';
   pageCountEl.textContent = '-';
   rawTextEl.textContent = 'Nenhuma leitura ainda.';
-  setStatus('Aguardando PDF.');
+  setStatus('Aguardando PDFs.');
   setProgress(0, 1);
   processBtn.disabled = true;
   clearBtn.disabled = true;
@@ -318,11 +336,14 @@ function clearAll() {
 }
 
 pdfInput.addEventListener('change', (event) => {
-  selectedFile = event.target.files?.[0] || null;
-  if (!selectedFile) return clearAll();
-  fileNameEl.textContent = selectedFile.name;
+  selectedFiles = Array.from(event.target.files || []).filter((file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'));
+  if (!selectedFiles.length) return clearAll();
+
+  fileNameEl.textContent = selectedFiles.length === 1
+    ? selectedFiles[0].name
+    : `${selectedFiles.length} PDFs selecionados: ${selectedFiles.map((file) => file.name).join(', ')}`;
   pageCountEl.textContent = '-';
-  setStatus('PDF selecionado. Clique em Processar PDF.');
+  setStatus(`${selectedFiles.length} PDF(s) selecionado(s). Clique em Processar PDFs.`);
   setProgress(0, 1);
   processBtn.disabled = false;
   clearBtn.disabled = false;
@@ -331,7 +352,7 @@ pdfInput.addEventListener('change', (event) => {
   render();
 });
 
-processBtn.addEventListener('click', processPdf);
+processBtn.addEventListener('click', processPdfs);
 clearBtn.addEventListener('click', clearAll);
 exportBtn.addEventListener('click', exportCsv);
 render();
