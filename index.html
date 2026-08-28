@@ -15,30 +15,35 @@
         <div>
           <p class="eyebrow">ShipFlow</p>
           <h1>Leitor de Declaração</h1>
-          <p class="subtitle">
-            Passe a declaração na frente da câmera. O app lê a descrição e soma as etiquetas por produto.
-          </p>
+          <p class="subtitle">Aponte para a área DESCRIÇÃO. Use zoom, foco e luz para melhorar a leitura.</p>
         </div>
-        <div class="badge">📷 Ao vivo</div>
+        <div class="badge">📷 Qualidade alta</div>
       </header>
 
       <section class="grid">
         <div class="card camera-card">
           <div class="video-wrap">
-            <video id="video" playsinline muted></video>
+            <video id="video" playsinline autoplay muted></video>
             <div id="placeholder" class="placeholder">Câmera desligada</div>
-            <div class="scan-box"></div>
+            <div class="scan-box"><span>Centralize a DESCRIÇÃO aqui</span></div>
           </div>
           <canvas id="canvas" hidden></canvas>
 
           <div class="actions">
-            <button id="cameraBtn" class="primary">📷 Abrir câmera</button>
+            <button id="cameraBtn" class="primary">📷 Abrir câmera HD</button>
             <button id="fallbackBtn" type="button">📸 Usar câmera do celular</button>
             <button id="scanBtn" class="primary">▶ Ler automático</button>
+          </div>
+          <div class="actions">
+            <button id="zoomInBtn" type="button">🔎+ Mais zoom</button>
+            <button id="zoomOutBtn" type="button">🔎- Menos zoom</button>
+            <button id="focusBtn" type="button">🎯 Melhorar foco</button>
+            <button id="torchBtn" type="button">🔦 Luz</button>
           </div>
           <input id="fallbackInput" type="file" accept="image/*" capture="environment" hidden />
 
           <div id="status" class="status">Pronto para iniciar</div>
+          <div id="qualityStatus" class="status quality">Qualidade: aguardando câmera.</div>
 
           <div class="detected">
             <strong>Última descrição:</strong>
@@ -65,9 +70,7 @@
             </div>
           </div>
 
-          <div id="table" class="table">
-            <div class="empty">Nenhum produto contado ainda.</div>
-          </div>
+          <div id="table" class="table"><div class="empty">Nenhum produto contado ainda.</div></div>
 
           <details class="raw">
             <summary>Ver texto OCR bruto</summary>
