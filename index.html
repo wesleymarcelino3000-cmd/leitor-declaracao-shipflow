@@ -15,29 +15,29 @@
         <div>
           <p class="eyebrow">ShipFlow</p>
           <h1>Contador por PDF</h1>
-          <p class="subtitle">Envie o PDF das etiquetas com declaração de conteúdo. O app lê as páginas e entrega a quantidade por descrição do produto.</p>
+          <p class="subtitle">Envie um ou vários PDFs das etiquetas com declaração de conteúdo. O app lê tudo em lote e entrega a quantidade por descrição do produto.</p>
         </div>
-        <div class="badge">📄 PDF sem câmera</div>
+        <div class="badge">📄 Vários PDFs</div>
       </header>
 
       <section class="grid">
         <div class="card upload-card">
           <label class="drop" for="pdfInput">
-            <strong>📄 Selecionar PDF das etiquetas</strong>
-            <span>Use o PDF completo do lote, com etiqueta e declaração de conteúdo.</span>
+            <strong>📄 Selecionar PDFs das etiquetas</strong>
+            <span>Pode selecionar vários PDFs de uma vez. O resultado será somado em uma contagem única.</span>
           </label>
-          <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden />
+          <input id="pdfInput" type="file" accept="application/pdf,.pdf" multiple hidden />
 
           <div class="actions">
-            <button id="processBtn" class="primary" disabled>⚡ Processar PDF</button>
+            <button id="processBtn" class="primary" disabled>⚡ Processar PDFs</button>
             <button id="clearBtn" disabled>🗑 Limpar</button>
           </div>
 
-          <div id="status" class="status">Aguardando PDF.</div>
+          <div id="status" class="status">Aguardando PDFs.</div>
           <div id="progress" class="progress"><div id="bar"></div></div>
 
           <div class="detected">
-            <strong>Arquivo:</strong>
+            <strong>Arquivos:</strong>
             <span id="fileName">Nenhum selecionado</span>
             <strong>Páginas:</strong>
             <span id="pageCount">-</span>
@@ -62,7 +62,7 @@
             </div>
           </div>
 
-          <div id="table" class="table"><div class="empty">Envie um PDF para gerar a contagem.</div></div>
+          <div id="table" class="table"><div class="empty">Envie um ou vários PDFs para gerar a contagem.</div></div>
         </div>
       </section>
     </main>
