@@ -7,83 +7,67 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/favicon.svg" />
     <link rel="stylesheet" href="/src/style.css" />
-    <title>Leitor Declaração ShipFlow</title>
+    <title>Contador de Etiquetas ShipFlow</title>
   </head>
   <body>
     <main class="app">
       <header class="hero">
         <div>
           <p class="eyebrow">ShipFlow</p>
-          <h1>Leitor de Declaração</h1>
-          <p class="subtitle">Aponte para a área DESCRIÇÃO. Use OCR rápido ou IA inteligente para separar os pedidos.</p>
+          <h1>Contador por PDF</h1>
+          <p class="subtitle">Envie o PDF das etiquetas com declaração de conteúdo. O app lê as páginas e entrega a quantidade por descrição do produto.</p>
         </div>
-        <div class="badge">🤖 IA + câmera HD</div>
+        <div class="badge">📄 PDF sem câmera</div>
       </header>
 
       <section class="grid">
-        <div class="card camera-card">
-          <div class="video-wrap">
-            <video id="video" playsinline autoplay muted></video>
-            <div id="placeholder" class="placeholder">Câmera desligada</div>
-            <div class="scan-box"><span>Centralize a DESCRIÇÃO aqui</span></div>
-          </div>
-          <canvas id="canvas" hidden></canvas>
+        <div class="card upload-card">
+          <label class="drop" for="pdfInput">
+            <strong>📄 Selecionar PDF das etiquetas</strong>
+            <span>Use o PDF completo do lote, com etiqueta e declaração de conteúdo.</span>
+          </label>
+          <input id="pdfInput" type="file" accept="application/pdf,.pdf" hidden />
 
           <div class="actions">
-            <button id="cameraBtn" class="primary">📷 Abrir câmera HD</button>
-            <button id="fallbackBtn" type="button">📸 Usar câmera do celular</button>
-            <button id="scanBtn" class="primary">▶ OCR automático</button>
+            <button id="processBtn" class="primary" disabled>⚡ Processar PDF</button>
+            <button id="clearBtn" disabled>🗑 Limpar</button>
           </div>
-          <div class="actions">
-            <button id="aiBtn" class="primary" type="button">🤖 Separar com IA</button>
-            <button id="zoomInBtn" type="button">🔎+ Mais zoom</button>
-            <button id="zoomOutBtn" type="button">🔎- Menos zoom</button>
-          </div>
-          <div class="actions">
-            <button id="focusBtn" type="button">🎯 Melhorar foco</button>
-            <button id="torchBtn" type="button">🔦 Luz</button>
-          </div>
-          <input id="fallbackInput" type="file" accept="image/*" capture="environment" hidden />
 
-          <div id="status" class="status">Pronto para iniciar</div>
-          <div id="qualityStatus" class="status quality">Qualidade: aguardando câmera.</div>
+          <div id="status" class="status">Aguardando PDF.</div>
+          <div id="progress" class="progress"><div id="bar"></div></div>
 
           <div class="detected">
-            <strong>Última descrição:</strong>
-            <span id="lastDescription">Nenhuma ainda</span>
-            <strong>Rastreio:</strong>
-            <span id="lastTracking">Não encontrado</span>
-            <strong>Confiança:</strong>
-            <span id="confidence">-</span>
+            <strong>Arquivo:</strong>
+            <span id="fileName">Nenhum selecionado</span>
+            <strong>Páginas:</strong>
+            <span id="pageCount">-</span>
+            <strong>Modo:</strong>
+            <span id="mode">Texto do PDF + OCR se precisar</span>
           </div>
 
-          <div class="actions">
-            <button id="manualBtn" class="primary" disabled>➕ Somar manual</button>
-            <button id="undoBtn" disabled>↩ Desfazer último</button>
-          </div>
+          <details class="raw">
+            <summary>Ver leitura detalhada</summary>
+            <pre id="rawText">Nenhuma leitura ainda.</pre>
+          </details>
         </div>
 
         <div class="card results-card">
           <div class="results-head">
             <div>
-              <h2>Contagem do lote</h2>
-              <p id="totalCount">0 etiquetas contadas</p>
+              <h2>Quantidade por descrição</h2>
+              <p id="totalCount">0 etiquetas encontradas</p>
             </div>
             <div class="actions small">
-              <button id="exportBtn" disabled>⬇ Exportar</button>
-              <button id="clearBtn" disabled>🗑 Limpar</button>
+              <button id="exportBtn" disabled>⬇ Exportar CSV</button>
             </div>
           </div>
 
-          <div id="table" class="table"><div class="empty">Nenhum produto contado ainda.</div></div>
-
-          <details class="raw">
-            <summary>Ver retorno OCR / IA</summary>
-            <pre id="rawText">Nenhuma leitura ainda.</pre>
-          </details>
+          <div id="table" class="table"><div class="empty">Envie um PDF para gerar a contagem.</div></div>
         </div>
       </section>
     </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="/src/app.js"></script>
   </body>
