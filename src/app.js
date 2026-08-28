@@ -1,6 +1,5 @@
-import { createWorker } from 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js';
-
 const $ = (id) => document.getElementById(id);
+
 const video = $('video');
 const canvas = $('canvas');
 const placeholder = $('placeholder');
@@ -105,7 +104,10 @@ function looksLikeDeclaration(raw) {
 async function initWorker() {
   if (worker) return worker;
   setStatus('Carregando leitor OCR...');
-  worker = await createWorker('por');
+  if (!window.Tesseract || !window.Tesseract.createWorker) {
+    throw new Error('Tesseract não carregou. Atualize a página com Ctrl+F5.');
+  }
+  worker = await window.Tesseract.createWorker('por');
   return worker;
 }
 
