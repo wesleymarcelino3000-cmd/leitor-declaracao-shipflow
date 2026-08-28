@@ -15,9 +15,9 @@
         <div>
           <p class="eyebrow">ShipFlow</p>
           <h1>Leitor de Declaração</h1>
-          <p class="subtitle">Aponte para a área DESCRIÇÃO. Use zoom, foco e luz para melhorar a leitura.</p>
+          <p class="subtitle">Aponte para a área DESCRIÇÃO. Use OCR rápido ou IA inteligente para separar os pedidos.</p>
         </div>
-        <div class="badge">📷 Qualidade alta</div>
+        <div class="badge">🤖 IA + câmera HD</div>
       </header>
 
       <section class="grid">
@@ -32,11 +32,14 @@
           <div class="actions">
             <button id="cameraBtn" class="primary">📷 Abrir câmera HD</button>
             <button id="fallbackBtn" type="button">📸 Usar câmera do celular</button>
-            <button id="scanBtn" class="primary">▶ Ler automático</button>
+            <button id="scanBtn" class="primary">▶ OCR automático</button>
           </div>
           <div class="actions">
+            <button id="aiBtn" class="primary" type="button">🤖 Separar com IA</button>
             <button id="zoomInBtn" type="button">🔎+ Mais zoom</button>
             <button id="zoomOutBtn" type="button">🔎- Menos zoom</button>
+          </div>
+          <div class="actions">
             <button id="focusBtn" type="button">🎯 Melhorar foco</button>
             <button id="torchBtn" type="button">🔦 Luz</button>
           </div>
@@ -50,6 +53,8 @@
             <span id="lastDescription">Nenhuma ainda</span>
             <strong>Rastreio:</strong>
             <span id="lastTracking">Não encontrado</span>
+            <strong>Confiança:</strong>
+            <span id="confidence">-</span>
           </div>
 
           <div class="actions">
@@ -73,7 +78,7 @@
           <div id="table" class="table"><div class="empty">Nenhum produto contado ainda.</div></div>
 
           <details class="raw">
-            <summary>Ver texto OCR bruto</summary>
+            <summary>Ver retorno OCR / IA</summary>
             <pre id="rawText">Nenhuma leitura ainda.</pre>
           </details>
         </div>
