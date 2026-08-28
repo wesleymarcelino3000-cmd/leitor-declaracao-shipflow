@@ -15,16 +15,22 @@
         <div>
           <p class="eyebrow">ShipFlow</p>
           <h1>Contador por PDF</h1>
-          <p class="subtitle">Adicione um ou vários PDFs das etiquetas com declaração de conteúdo. O app soma tudo em uma única contagem por descrição.</p>
+          <p class="subtitle">Escolha a pasta onde estão os PDFs ou adicione PDFs um por um. O app soma tudo em uma única contagem por descrição.</p>
         </div>
-        <div class="badge">📄 PDFs em fila</div>
+        <div class="badge">📁 Pasta de PDFs</div>
       </header>
 
       <section class="grid">
         <div class="card upload-card">
-          <label class="drop" for="pdfInput">
+          <label class="drop" for="folderInput">
+            <strong>📁 Selecionar pasta com PDFs</strong>
+            <span>Melhor opção: selecione a pasta inteira e o sistema pega todos os PDFs de dentro.</span>
+          </label>
+          <input id="folderInput" type="file" accept="application/pdf,.pdf" webkitdirectory directory multiple hidden />
+
+          <label class="drop secondary-drop" for="pdfInput">
             <strong>➕ Adicionar PDF à fila</strong>
-            <span>Clique várias vezes para adicionar mais PDFs. Também aceita seleção múltipla quando o navegador permitir.</span>
+            <span>Use se quiser adicionar um PDF por vez. Pode clicar várias vezes.</span>
           </label>
           <input id="pdfInput" type="file" accept="application/pdf,.pdf" multiple hidden />
 
@@ -62,13 +68,13 @@
             </div>
           </div>
 
-          <div id="table" class="table"><div class="empty">Adicione PDFs para gerar a contagem.</div></div>
+          <div id="table" class="table"><div class="empty">Selecione uma pasta ou adicione PDFs para gerar a contagem.</div></div>
         </div>
       </section>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="/src/app.js?v=fila-pdfs-2"></script>
+    <script src="/src/app.js?v=pasta-pdfs-1"></script>
   </body>
 </html>
