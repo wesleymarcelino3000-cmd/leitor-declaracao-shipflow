@@ -7,17 +7,17 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/favicon.svg" />
     <link rel="stylesheet" href="/src/style.css" />
-    <title>Contador de Etiquetas ShipFlow</title>
+    <title>Contador de Estoque ShipFlow</title>
   </head>
   <body>
     <main class="app">
       <header class="hero">
         <div>
           <p class="eyebrow">ShipFlow</p>
-          <h1>Contador por PDF</h1>
-          <p class="subtitle">Escolha a pasta onde estão os PDFs. O app lê o bloco DESCRICAO até TOTAL e calcula a quantidade gasta por produto real.</p>
+          <h1>Contador de Estoque por PDF</h1>
+          <p class="subtitle">Escolha a pasta onde estão os PDFs. O app lê a descrição real entre DESCRICAO e TOTAL, interpreta quantidades, sabores e multiplicador antes de R$.</p>
         </div>
-        <div class="badge">📦 Produtos reais</div>
+        <div class="badge">📦 Estoque por fórmula</div>
       </header>
 
       <section class="grid">
@@ -35,7 +35,7 @@
           <input id="pdfInput" type="file" accept="application/pdf,.pdf" multiple hidden />
 
           <div class="actions">
-            <button id="processBtn" class="primary" disabled>⚡ Processar fila de PDFs</button>
+            <button id="processBtn" class="primary" disabled>⚡ Processar PDFs</button>
             <button id="clearBtn" disabled>🗑 Limpar fila</button>
           </div>
 
@@ -48,7 +48,7 @@
             <strong>Páginas lidas:</strong>
             <span id="pageCount">-</span>
             <strong>Regra:</strong>
-            <span id="mode">Quantidade interna × multiplicador antes do R$</span>
+            <span id="mode">Ler descrição + multiplicador antes de R$</span>
           </div>
 
           <details class="raw">
@@ -61,7 +61,7 @@
           <div class="results-head">
             <div>
               <h2>Quantidade gasta por produto</h2>
-              <p id="totalCount">0 unidades encontradas</p>
+              <p id="totalCount">0 itens calculados</p>
             </div>
             <div class="actions small">
               <button id="exportBtn" disabled>⬇ Exportar CSV</button>
@@ -74,7 +74,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="/src/app.js?v=produto-real-1"></script>
+    <script src="/src/app.js?v=formula-estoque-2"></script>
   </body>
 </html>
