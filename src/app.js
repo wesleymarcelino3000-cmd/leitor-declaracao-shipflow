@@ -15,7 +15,7 @@ const barEl = $('bar');
 
 let selectedFiles = [];
 let stockCounts = {};
-let descriptionCounts = {};
+let descriptionGroups = {};
 let pageReads = [];
 let details = [];
 
@@ -71,10 +71,28 @@ function clean(text) {
     .trim();
 }
 
+function cleanExactDescription(text) {
+  return String(text || '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([|+])/g, ' $1')
+    .replace(/([|+])\s+/g, '$1 ')
+    .trim();
+}
+
 function add(map, key, qty) {
   const amount = Number(qty || 0);
   if (!key || !Number.isFinite(amount) || amount <= 0) return;
   map[key] = (map[key] || 0) + amount;
+}
+
+function addDescriptionGroup(description, multiplier) {
+  const label = cleanExactDescription(description);
+  if (!label) return;
+  const key = normalize(label);
+  if (!descriptionGroups[key]) {
+    descriptionGroups[key] = { description: label, count: 0 };
+  }
+  descriptionGroups[key].count += Number(multiplier || 1) || 1;
 }
 
 function extractTracking(text) {
@@ -112,7 +130,7 @@ function extractDescriptionBlocks(text) {
   for (let i = 0; i < lines.length; i += 1) {
     if (!lineHasDescriptionHeader(lines[i])) continue;
     const block = [];
-    const headerTail = clean(lines[i]
+    const headerTail = cleanExactDescription(lines[i]
       .replace(/DESCRICAO/gi, '')
       .replace(/QTD\s*x\s*TOTAL/gi, ''));
     if (headerTail && !/^QTD/i.test(headerTail)) block.push(headerTail);
@@ -133,14 +151,14 @@ function parseRowsFromBlock(blockLines) {
   let current = null;
 
   for (const raw of blockLines) {
-    const line = clean(raw);
+    const line = cleanExactDescription(raw);
     if (!line) continue;
     const qtyPrice = findLastQtyPrice(line);
 
     if (qtyPrice) {
       if (current?.description) rows.push(current);
       current = {
-        description: clean(line.slice(0, qtyPrice.index)),
+        description: cleanExactDescription(line.slice(0, qtyPrice.index)),
         multiplier: qtyPrice.qty || 1,
         rawLines: [line],
       };
@@ -148,7 +166,7 @@ function parseRowsFromBlock(blockLines) {
     }
 
     if (current) {
-      current.description = clean(`${current.description} ${line}`);
+      current.description = cleanExactDescription(`${current.description} ${line}`);
       current.rawLines.push(line);
     }
   }
@@ -215,14 +233,11 @@ function interpretDescription(description, multiplier) {
   if (hasMelasonina) {
     let totalMelasonina = getNumberBeforeProduct(desc, /MELASONINA/);
 
-    // Formato: KIT 11X MELASONINA | 7 MORANGO + 3 LIMÃO + 1 MARACUJA
     const kitMatch = n.match(/KIT\s*(\d+)\s*X?\s*MELASONINA/) || n.match(/(\d+)\s*X\s*MELASONINA/);
     if (kitMatch?.[1]) totalMelasonina = Number(kitMatch[1]);
 
-    // Formato: MELASONINA | SABOR MORANGO 1x R$...
     if (!totalMelasonina && /^MELASONINA\b/.test(n)) totalMelasonina = 1;
 
-    // Formato: 1 Frasco - Melasonina / 3un Melasonina / 1 Melasonina 30ml
     const frascoMatch = n.match(/(\d+)\s*(?:UN|FRASCO|FRASCOS)?\s*-?\s*MELASONINA/) || n.match(/(\d+)\s*UN\s*MELASONINA/);
     if (frascoMatch?.[1]) totalMelasonina = Number(frascoMatch[1]);
 
@@ -230,13 +245,10 @@ function interpretDescription(description, multiplier) {
   }
 
   let flavorSum = 0;
-  const explicitFlavorCount = flavors.filter((item) => hasExplicitFlavorQuantity(desc, item.flavor)).length;
   const mentionedFlavorCount = countMentionedFlavors(desc);
 
   for (const item of flavors) {
     let qty = getFlavorQuantity(desc, item.flavor);
-    // Quando tem 3 MELASONINA + MÁSCARA | MARACUJÁ | LIMÃO | MORANGO, cada sabor vale 1.
-    // Isso vem do texto, porque o sabor apareceu sem número próprio.
     if (!qty && mentionedFlavorCount > 0 && normalize(desc).includes(normalize(item.flavor))) qty = 1;
     if (qty > 0) {
       flavorSum += qty;
@@ -293,8 +305,7 @@ function processPageText(fileName, pageNumber, text) {
   for (const block of blocks) {
     const rows = parseRowsFromBlock(block);
     for (const row of rows) {
-      const canonicalDescription = normalize(row.description);
-      add(descriptionCounts, canonicalDescription, row.multiplier);
+      addDescriptionGroup(row.description, row.multiplier);
 
       const interpreted = interpretDescription(row.description, row.multiplier);
       for (const item of interpreted) {
@@ -325,7 +336,7 @@ async function processPdfs() {
   }
 
   stockCounts = {};
-  descriptionCounts = {};
+  descriptionGroups = {};
   pageReads = [];
   details = [];
   render();
@@ -390,7 +401,7 @@ function renderRaw() {
           const interpreted = row.interpreted.length
             ? row.interpreted.map((p) => `  - ${p.name}: ${p.qty}`).join('\n')
             : '  - nada interpretado';
-          return `Descrição: ${row.description}\nMultiplicador: ${row.multiplier}\n${interpreted}`;
+          return `Descrição exata: ${row.description}\nMultiplicador da linha: ${row.multiplier}\n${interpreted}`;
         }).join('\n\n')
       : 'Nenhuma descrição encontrada entre DESCRICAO e TOTAL.';
     return `${header}\nRastreio: ${item.tracking || '-'}\n${rows}\n\nTEXTO EXTRAÍDO:\n${item.raw}`;
@@ -407,30 +418,46 @@ function sortedStockRows() {
   });
 }
 
-function render() {
-  const rows = sortedStockRows();
-  const total = rows.reduce((sum, row) => sum + row.count, 0);
-  const declarationPages = pageReads.filter((p) => p.rows.length > 0).length;
-  totalCountEl.textContent = `${total} itens calculados | ${rows.length} produtos | ${declarationPages} páginas com declaração`;
-  exportBtn.disabled = rows.length === 0;
+function sortedDescriptionRows() {
+  return Object.values(descriptionGroups)
+    .map((row) => ({ description: row.description, count: row.count }))
+    .sort((a, b) => b.count - a.count || a.description.localeCompare(b.description));
+}
 
-  const title = document.querySelector('.results-head h2');
-  if (title) title.textContent = 'Quantidade gasta por produto';
-
-  if (!rows.length) {
-    tableEl.innerHTML = '<div class="empty">Selecione uma pasta ou adicione PDFs para gerar a contagem.</div>';
-    return;
-  }
-
-  tableEl.innerHTML = rows.map((row) => `
+function renderRows(rows, unitLabel) {
+  return rows.map((row) => `
     <div class="row">
       <div>
         <strong>${escapeHtml(row.description)}</strong>
-        <span>${row.count} unidade${row.count === 1 ? '' : 's'}</span>
+        <span>${row.count} ${unitLabel}${row.count === 1 ? '' : 's'}</span>
       </div>
       <b>${row.count}</b>
     </div>
   `).join('');
+}
+
+function render() {
+  const stockRows = sortedStockRows();
+  const descriptionRows = sortedDescriptionRows();
+  const total = stockRows.reduce((sum, row) => sum + row.count, 0);
+  const declarationPages = pageReads.filter((p) => p.rows.length > 0).length;
+  totalCountEl.textContent = `${total} itens calculados | ${stockRows.length} produtos | ${declarationPages} páginas com declaração`;
+  exportBtn.disabled = stockRows.length === 0;
+
+  const title = document.querySelector('.results-head h2');
+  if (title) title.textContent = 'Quantidade gasta por produto';
+
+  if (!stockRows.length && !descriptionRows.length) {
+    tableEl.innerHTML = '<div class="empty">Selecione uma pasta ou adicione PDFs para gerar a contagem.</div>';
+    return;
+  }
+
+  tableEl.innerHTML = `
+    <div class="section-title">Quantidade gasta por produto</div>
+    ${stockRows.length ? renderRows(stockRows, 'unidade') : '<div class="empty">Nenhum produto calculado.</div>'}
+    <div class="section-title">Descrições exatas das etiquetas</div>
+    ${descriptionRows.length ? renderRows(descriptionRows, 'multiplicador') : '<div class="empty">Nenhuma descrição encontrada.</div>'}
+  `;
 }
 
 function renderFileQueue() {
@@ -457,7 +484,7 @@ function addFiles(files) {
     if (!exists) selectedFiles.push(file);
   }
   stockCounts = {};
-  descriptionCounts = {};
+  descriptionGroups = {};
   pageReads = [];
   details = [];
   rawTextEl.textContent = 'Nenhuma leitura ainda.';
@@ -469,8 +496,9 @@ function addFiles(files) {
 }
 
 function exportCsv() {
-  const rows = sortedStockRows().map((row) => [row.description, String(row.count)]);
-  const csvRows = [['Produto', 'Quantidade'], ...rows];
+  const stockRows = sortedStockRows().map((row) => ['ESTOQUE', row.description, String(row.count)]);
+  const descRows = sortedDescriptionRows().map((row) => ['DESCRICAO_EXATA', row.description, String(row.count)]);
+  const csvRows = [['Tipo', 'Nome', 'Quantidade'], ...stockRows, ...descRows];
   const csv = csvRows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(';')).join('\n');
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -499,7 +527,7 @@ exportBtn?.addEventListener('click', exportCsv);
 clearBtn?.addEventListener('click', () => {
   selectedFiles = [];
   stockCounts = {};
-  descriptionCounts = {};
+  descriptionGroups = {};
   pageReads = [];
   details = [];
   rawTextEl.textContent = 'Nenhuma leitura ainda.';
