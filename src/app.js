@@ -46,10 +46,7 @@ function stripAccents(text) {
 }
 
 function normalize(text) {
-  return stripAccents(text)
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toUpperCase();
+  return stripAccents(text).replace(/\s+/g, ' ').trim().toUpperCase();
 }
 
 function fixOcr(text) {
@@ -71,12 +68,21 @@ function clean(text) {
     .trim();
 }
 
-function cleanExactDescription(text) {
+function cleanExact(text) {
   return String(text || '')
     .replace(/\s+/g, ' ')
     .replace(/\s+([|+])/g, ' $1')
     .replace(/([|+])\s+/g, '$1 ')
     .trim();
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function add(map, key, qty) {
@@ -85,13 +91,11 @@ function add(map, key, qty) {
   map[key] = (map[key] || 0) + amount;
 }
 
-function addDescriptionGroup(description, multiplier) {
-  const label = cleanExactDescription(description);
+function addDescriptionGroup(exactText, multiplier) {
+  const label = cleanExact(exactText);
   if (!label) return;
   const key = normalize(label);
-  if (!descriptionGroups[key]) {
-    descriptionGroups[key] = { description: label, count: 0 };
-  }
+  if (!descriptionGroups[key]) descriptionGroups[key] = { description: label, count: 0 };
   descriptionGroups[key].count += Number(multiplier || 1) || 1;
 }
 
@@ -129,10 +133,9 @@ function extractDescriptionBlocks(text) {
   const blocks = [];
   for (let i = 0; i < lines.length; i += 1) {
     if (!lineHasDescriptionHeader(lines[i])) continue;
+
     const block = [];
-    const headerTail = cleanExactDescription(lines[i]
-      .replace(/DESCRICAO/gi, '')
-      .replace(/QTD\s*x\s*TOTAL/gi, ''));
+    const headerTail = cleanExact(lines[i].replace(/DESCRICAO/gi, '').replace(/QTD\s*x\s*TOTAL/gi, ''));
     if (headerTail && !/^QTD/i.test(headerTail)) block.push(headerTail);
 
     for (let j = i + 1; j < lines.length; j += 1) {
@@ -141,6 +144,7 @@ function extractDescriptionBlocks(text) {
       if (!n || n.includes('DECLARO QUE') || n.includes('ASSINATURA')) break;
       block.push(lines[j]);
     }
+
     if (block.length) blocks.push(block);
   }
   return blocks;
@@ -151,22 +155,25 @@ function parseRowsFromBlock(blockLines) {
   let current = null;
 
   for (const raw of blockLines) {
-    const line = cleanExactDescription(raw);
+    const line = cleanExact(raw);
     if (!line) continue;
     const qtyPrice = findLastQtyPrice(line);
 
     if (qtyPrice) {
       if (current?.description) rows.push(current);
       current = {
-        description: cleanExactDescription(line.slice(0, qtyPrice.index)),
+        description: cleanExact(line.slice(0, qtyPrice.index)),
+        exactLine: cleanExact(line),
         multiplier: qtyPrice.qty || 1,
+        qtyPriceText: qtyPrice.text,
         rawLines: [line],
       };
       continue;
     }
 
     if (current) {
-      current.description = cleanExactDescription(`${current.description} ${line}`);
+      current.description = cleanExact(`${current.description} ${line}`);
+      current.exactLine = cleanExact(`${current.exactLine} ${line}`);
       current.rawLines.push(line);
     }
   }
@@ -201,13 +208,6 @@ function getFlavorQuantity(text, flavor) {
   return n.includes(f) ? 1 : 0;
 }
 
-function hasExplicitFlavorQuantity(text, flavor) {
-  const n = normalize(text);
-  const f = normalize(flavor);
-  return new RegExp(`(?:^|[|+\\s])([0-9]+)\\s*(?:X|UN|UNIDADE|UNIDADES)?\\s*${f}\\b`, 'i').test(n)
-    || new RegExp(`\\b${f}\\b\\s*(?:[|+\\- ]+)?([0-9]+)\\s*(?:X|UN|UNIDADE|UNIDADES)?`, 'i').test(n);
-}
-
 function countMentionedFlavors(text) {
   return ['MARACUJÁ', 'LIMÃO', 'MORANGO'].filter((flavor) => normalize(text).includes(normalize(flavor))).length;
 }
@@ -217,9 +217,9 @@ function interpretDescription(description, multiplier) {
   const n = normalize(desc);
   const m = Number(multiplier || 1) || 1;
   const out = [];
-  const addOut = (name, qty, reason) => {
+  const addOut = (name, qty) => {
     const amount = Number(qty || 0) * m;
-    if (amount > 0) out.push({ name, qty: amount, reason });
+    if (amount > 0) out.push({ name, qty: amount });
   };
 
   const hasMelasonina = n.includes('MELASONINA');
@@ -232,39 +232,34 @@ function interpretDescription(description, multiplier) {
 
   if (hasMelasonina) {
     let totalMelasonina = getNumberBeforeProduct(desc, /MELASONINA/);
-
     const kitMatch = n.match(/KIT\s*(\d+)\s*X?\s*MELASONINA/) || n.match(/(\d+)\s*X\s*MELASONINA/);
     if (kitMatch?.[1]) totalMelasonina = Number(kitMatch[1]);
-
     if (!totalMelasonina && /^MELASONINA\b/.test(n)) totalMelasonina = 1;
-
     const frascoMatch = n.match(/(\d+)\s*(?:UN|FRASCO|FRASCOS)?\s*-?\s*MELASONINA/) || n.match(/(\d+)\s*UN\s*MELASONINA/);
     if (frascoMatch?.[1]) totalMelasonina = Number(frascoMatch[1]);
-
-    if (totalMelasonina > 0) addOut('Melasonina total', totalMelasonina, `${totalMelasonina} Melasonina x multiplicador ${m}`);
+    if (totalMelasonina > 0) addOut('Melasonina total', totalMelasonina);
   }
 
   let flavorSum = 0;
   const mentionedFlavorCount = countMentionedFlavors(desc);
-
   for (const item of flavors) {
     let qty = getFlavorQuantity(desc, item.flavor);
     if (!qty && mentionedFlavorCount > 0 && normalize(desc).includes(normalize(item.flavor))) qty = 1;
     if (qty > 0) {
       flavorSum += qty;
-      addOut(item.name, qty, `${qty} ${item.flavor} x multiplicador ${m}`);
+      addOut(item.name, qty);
     }
   }
 
   if (hasMelasonina && flavorSum === 0) {
     let avulsa = getNumberBeforeProduct(desc, /MELASONINA/);
     if (!avulsa && /^MELASONINA\b/.test(n)) avulsa = 1;
-    if (avulsa > 0) addOut('Melasonina avulsa / sem sabor', avulsa, `${avulsa} Melasonina sem sabor x multiplicador ${m}`);
+    if (avulsa > 0) addOut('Melasonina avulsa / sem sabor', avulsa);
   }
 
   if (hasMascara) {
     const mascaraQty = getNumberBeforeProduct(desc, /MASCARA/) || 1;
-    addOut('Máscara para Dormir', mascaraQty, `${mascaraQty} máscara x multiplicador ${m}`);
+    addOut('Máscara para Dormir', mascaraQty);
   }
 
   return out;
@@ -284,7 +279,6 @@ function itemsToLines(items) {
     }
     row.items.push({ x, text });
   }
-
   return rows
     .sort((a, b) => b.y - a.y)
     .map((row) => row.items.sort((a, b) => a.x - b.x).map((item) => item.text).join(' '))
@@ -300,31 +294,18 @@ function processPageText(fileName, pageNumber, text) {
   const fixed = fixOcr(text);
   const blocks = extractDescriptionBlocks(fixed);
   const tracking = extractTracking(fixed);
-  const pageDetail = { fileName, page: pageNumber, tracking, raw: fixed, rows: [], counted: 0 };
+  const pageDetail = { fileName, page: pageNumber, tracking, raw: fixed, rows: [] };
 
   for (const block of blocks) {
     const rows = parseRowsFromBlock(block);
     for (const row of rows) {
-      addDescriptionGroup(row.description, row.multiplier);
-
+      addDescriptionGroup(row.exactLine, row.multiplier);
       const interpreted = interpretDescription(row.description, row.multiplier);
-      for (const item of interpreted) {
-        add(stockCounts, item.name, item.qty);
-      }
-
-      details.push({
-        fileName,
-        page: pageNumber,
-        tracking,
-        description: row.description,
-        multiplier: row.multiplier,
-        interpreted,
-      });
+      for (const item of interpreted) add(stockCounts, item.name, item.qty);
+      details.push({ fileName, page: pageNumber, tracking, description: row.description, exactLine: row.exactLine, multiplier: row.multiplier, interpreted });
       pageDetail.rows.push({ ...row, interpreted });
-      pageDetail.counted += interpreted.length;
     }
   }
-
   pageReads.push(pageDetail);
 }
 
@@ -350,7 +331,6 @@ async function processPdfs() {
     const opened = [];
     let totalPages = 0;
     setStatus('Abrindo PDFs...');
-
     for (const file of selectedFiles) {
       const buffer = await file.arrayBuffer();
       const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
@@ -360,7 +340,6 @@ async function processPdfs() {
 
     let readPages = 0;
     pageCountEl.textContent = `0/${totalPages}`;
-
     for (const item of opened) {
       for (let pageNumber = 1; pageNumber <= item.pdf.numPages; pageNumber += 1) {
         setStatus(`Lendo ${item.file.name} — página ${pageNumber} de ${item.pdf.numPages}...`);
@@ -393,15 +372,12 @@ function renderRaw() {
     rawTextEl.textContent = 'Nenhuma leitura ainda.';
     return;
   }
-
   rawTextEl.textContent = pageReads.map((item) => {
     const header = `${item.fileName} | PÁGINA ${item.page} | ${item.rows.length ? `${item.rows.length} descrição(ões)` : 'sem declaração contada'}`;
     const rows = item.rows.length
       ? item.rows.map((row) => {
-          const interpreted = row.interpreted.length
-            ? row.interpreted.map((p) => `  - ${p.name}: ${p.qty}`).join('\n')
-            : '  - nada interpretado';
-          return `Descrição exata: ${row.description}\nMultiplicador da linha: ${row.multiplier}\n${interpreted}`;
+          const interpreted = row.interpreted.length ? row.interpreted.map((p) => `  - ${p.name}: ${p.qty}`).join('\n') : '  - nada interpretado';
+          return `Linha exata: ${row.exactLine}\nDescrição para cálculo: ${row.description}\nMultiplicador: ${row.multiplier}\n${interpreted}`;
         }).join('\n\n')
       : 'Nenhuma descrição encontrada entre DESCRICAO e TOTAL.';
     return `${header}\nRastreio: ${item.tracking || '-'}\n${rows}\n\nTEXTO EXTRAÍDO:\n${item.raw}`;
@@ -419,21 +395,23 @@ function sortedStockRows() {
 }
 
 function sortedDescriptionRows() {
-  return Object.values(descriptionGroups)
-    .map((row) => ({ description: row.description, count: row.count }))
-    .sort((a, b) => b.count - a.count || a.description.localeCompare(b.description));
+  return Object.values(descriptionGroups).sort((a, b) => b.count - a.count || a.description.localeCompare(b.description));
 }
 
-function renderRows(rows, unitLabel) {
-  return rows.map((row) => `
-    <div class="row">
-      <div>
-        <strong>${escapeHtml(row.description)}</strong>
-        <span>${row.count} ${unitLabel}${row.count === 1 ? '' : 's'}</span>
+function renderRows(title, rows, emptyText) {
+  if (!rows.length) return `<h2 class="section-title">${escapeHtml(title)}</h2><div class="empty">${escapeHtml(emptyText)}</div>`;
+  return `
+    <h2 class="section-title">${escapeHtml(title)}</h2>
+    ${rows.map((row) => `
+      <div class="row">
+        <div>
+          <strong>${escapeHtml(row.description)}</strong>
+          <span>${row.count} ${title.includes('Descrições') ? 'multiplicador total' : `unidade${row.count === 1 ? '' : 's'}`}</span>
+        </div>
+        <b>${row.count}</b>
       </div>
-      <b>${row.count}</b>
-    </div>
-  `).join('');
+    `).join('')}
+  `;
 }
 
 function render() {
@@ -443,7 +421,6 @@ function render() {
   const declarationPages = pageReads.filter((p) => p.rows.length > 0).length;
   totalCountEl.textContent = `${total} itens calculados | ${stockRows.length} produtos | ${declarationPages} páginas com declaração`;
   exportBtn.disabled = stockRows.length === 0;
-
   const title = document.querySelector('.results-head h2');
   if (title) title.textContent = 'Quantidade gasta por produto';
 
@@ -452,12 +429,10 @@ function render() {
     return;
   }
 
-  tableEl.innerHTML = `
-    <div class="section-title">Quantidade gasta por produto</div>
-    ${stockRows.length ? renderRows(stockRows, 'unidade') : '<div class="empty">Nenhum produto calculado.</div>'}
-    <div class="section-title">Descrições exatas das etiquetas</div>
-    ${descriptionRows.length ? renderRows(descriptionRows, 'multiplicador') : '<div class="empty">Nenhuma descrição encontrada.</div>'}
-  `;
+  tableEl.innerHTML = [
+    renderRows('Quantidade gasta por produto', stockRows, 'Nenhum produto calculado.'),
+    renderRows('Descrições exatas das etiquetas', descriptionRows, 'Nenhuma descrição encontrada.'),
+  ].join('<div style="height:24px"></div>');
 }
 
 function renderFileQueue() {
@@ -469,7 +444,6 @@ function renderFileQueue() {
     setStatus('Aguardando PDFs.');
     return;
   }
-
   fileNameEl.textContent = selectedFiles.map((file, index) => `${index + 1}. ${file.webkitRelativePath || file.name}`).join(' | ');
   processBtn.disabled = false;
   clearBtn.disabled = false;
@@ -496,9 +470,9 @@ function addFiles(files) {
 }
 
 function exportCsv() {
-  const stockRows = sortedStockRows().map((row) => ['ESTOQUE', row.description, String(row.count)]);
-  const descRows = sortedDescriptionRows().map((row) => ['DESCRICAO_EXATA', row.description, String(row.count)]);
-  const csvRows = [['Tipo', 'Nome', 'Quantidade'], ...stockRows, ...descRows];
+  const stockRows = sortedStockRows().map((row) => ['Produto calculado', row.description, String(row.count)]);
+  const descriptionRows = sortedDescriptionRows().map((row) => ['Descrição exata da etiqueta', row.description, String(row.count)]);
+  const csvRows = [['Tipo', 'Nome', 'Quantidade'], ...stockRows, ...descriptionRows];
   const csv = csvRows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(';')).join('\n');
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -509,15 +483,6 @@ function exportCsv() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
 
 pdfInput?.addEventListener('change', (event) => addFiles(event.target.files));
